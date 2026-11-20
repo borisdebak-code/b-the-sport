@@ -185,3 +185,23 @@ export function isTransfer(text: string): boolean {
   const hay = normalize(text);
   return TRANSFER_WORDS.some((w) => hasWord(hay, w));
 }
+
+export type TransferStage = 'sluzbeno' | 'dogovor' | 'pregovori' | 'glasina';
+
+const STAGE_WORDS: [TransferStage, string[]][] = [
+  ['sluzbeno', ['here we go', 'sluzbeno', 'zvanicno', 'officially', 'official', 'confirmed', 'potvrdeno', 'predstavljen',
+    'potpisao', 'potpisala', 'signs for', 'has signed', 'completes move', 'oficial', 'ufficiale', 'offiziell']],
+  ['dogovor', ['dogovor', 'dogovoren', 'agreement', 'agreed', 'deal done', 'deal agreed', 'medical', 'lijecnicki',
+    'acuerdo', 'accordo', 'einigung']],
+  ['pregovori', ['pregovor', 'talks', 'negotiat', 'bid', 'ponuda', 'ponudu', 'offer', 'oferta', 'offerta', 'angebot',
+    'interes', 'interest', 'zeli', 'want', 'target', 'meta', 'radar']],
+];
+
+/** How far a transfer story has progressed, from its text. */
+export function transferStage(text: string): TransferStage {
+  const hay = normalize(text);
+  for (const [stage, words] of STAGE_WORDS) {
+    if (words.some((w) => hasWord(hay, w))) return stage;
+  }
+  return 'glasina';
+}

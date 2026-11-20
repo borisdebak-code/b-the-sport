@@ -24,6 +24,14 @@ export function AppHeader({ title }: { title: string }) {
         <View style={styles.brandRight}>
           <Text style={styles.section}>{title}</Text>
           <Pressable
+            onPress={() => router.push('/pretraga')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Pretraga"
+            style={({ pressed }) => pressed && styles.pressed}>
+            <Ionicons name="search" size={20} color={C.headerText} />
+          </Pressable>
+          <Pressable
             onPress={() => router.push('/favoriti')}
             hitSlop={10}
             accessibilityRole="button"

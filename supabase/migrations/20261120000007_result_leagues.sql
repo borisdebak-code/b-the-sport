@@ -1,0 +1,31 @@
+-- Competitions shown in Rezultati (API-Sports league ids, checked against the API on 2026-11-20).
+-- UEFA/FIFA competition ids for football are API-Football's standard ids.
+insert into public.result_leagues (sport, league_id, name, priority) values
+('nogomet', 210, 'SuperSport HNL', 1),
+('nogomet', 2,   'UEFA Liga prvaka', 2),
+('nogomet', 3,   'UEFA Europska liga', 3),
+('nogomet', 848, 'UEFA Konferencijska liga', 4),
+('nogomet', 5,   'UEFA Liga nacija', 5),
+('nogomet', 1,   'Svjetsko prvenstvo', 6),
+('nogomet', 4,   'Europsko prvenstvo', 7),
+('nogomet', 32,  'SP kvalifikacije (Europa)', 8),
+('nogomet', 39,  'Premier League', 10),
+('nogomet', 140, 'La Liga', 11),
+('nogomet', 135, 'Serie A', 12),
+('nogomet', 78,  'Bundesliga', 13),
+('nogomet', 61,  'Ligue 1', 14),
+('nogomet', 211, 'Prva NL', 20),
+('nogomet', 286, 'Superliga Srbije', 30),
+('nogomet', 315, 'Premijer liga BiH', 31),
+('nogomet', 373, '1. SNL', 32),
+('nogomet', 253, 'MLS', 40),
+('kosarka', 30,  'Premijer liga (HR)', 1),
+('kosarka', 198, 'ABA liga', 2),
+('kosarka', 120, 'Euroliga', 3),
+('kosarka', 12,  'NBA', 4),
+('kosarka', 117, 'ACB', 10),
+('rukomet', 10,  'Premijer liga (HR)', 1),
+('rukomet', 39,  'Bundesliga', 10),
+('rukomet', 34,  'Starligue', 11),
+('rukomet', 103, 'Liga ASOBAL', 12)
+on conflict (sport, league_id) do update set name = excluded.name, priority = excluded.priority;

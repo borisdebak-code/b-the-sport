@@ -39,6 +39,7 @@ export default function RootLayout() {
             }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="favoriti" options={{ title: 'Favoriti' }} />
+            <Stack.Screen name="pretraga" options={{ title: 'Pretraga' }} />
             <Stack.Screen name="favorit/[id]" options={{ title: '' }} />
           </Stack>
         </AppStateProvider>

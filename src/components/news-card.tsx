@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Spacing, usePalette } from '@/constants/theme';
-import { relativeTime, type FeedEntry } from '@/lib/feed';
+import { RELIABILITY_LABEL, relativeTime, TRANSFER_STAGE_LABEL, type FeedEntry } from '@/lib/feed';
 import { SPORT_LABEL } from '@/lib/sports';
 import { useAppState } from '@/state/app-state';
 
@@ -13,7 +13,18 @@ function open(url: string) {
   WebBrowser.openBrowserAsync(url).catch(() => {});
 }
 
-export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: FeedEntry; showSport: boolean }) {
+const STAGE_COLOR = { sluzbeno: '#1E8E3E', dogovor: '#2F6FDB', pregovori: '#C77700', glasina: '#6B7280' } as const;
+
+export const NewsCard = memo(function NewsCard({
+  entry,
+  showSport,
+  showTransfer = false,
+}: {
+  entry: FeedEntry;
+  showSport: boolean;
+  /** Transfer centar: stage and source reliability badges */
+  showTransfer?: boolean;
+}) {
   const p = usePalette();
   const [expanded, setExpanded] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -42,6 +53,23 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
               <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={16} color={saved ? p.accent : p.textSecondary} />
             </Pressable>
           </View>
+          {showTransfer && entry.transfer_stage ? (
+            <View style={styles.badges}>
+              <Text style={[styles.badge, { backgroundColor: STAGE_COLOR[entry.transfer_stage] }]}>
+                {TRANSFER_STAGE_LABEL[entry.transfer_stage]}
+              </Text>
+              {entry.source_reliability ? (
+                <Text
+                  style={[
+                    styles.badgeOutline,
+                    { color: entry.source_reliability === 1 ? p.text : p.textSecondary, borderColor: p.border },
+                  ]}>
+                  {'●'.repeat(4 - entry.source_reliability)}
+                  {'○'.repeat(entry.source_reliability - 1)} {RELIABILITY_LABEL[entry.source_reliability]}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <Text style={[styles.title, { color: p.text }]} numberOfLines={4}>
             {title}
           </Text>
@@ -149,6 +177,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  badge: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  badgeOutline: {
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
   },
   save: {
     marginLeft: 'auto',

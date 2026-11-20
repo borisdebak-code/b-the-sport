@@ -2,7 +2,7 @@
 // stores new items and clusters them into stories.
 // Scheduled every 5 minutes with pg_cron (see supabase/cron.sql).
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { classifySport, isTransfer } from '../_shared/classify.ts';
+import { classifySport, isTransfer, transferStage } from '../_shared/classify.ts';
 import { discoverFeeds, parseFeed, youtubeFeedFromChannelPage, type FeedItem } from '../_shared/feed.ts';
 import { needsTranslation, translatorFromEnv } from '../_shared/translate.ts';
 
@@ -107,7 +107,7 @@ async function processFeed(feed: FeedRow): Promise<number> {
     title_hr: titlesHr[idx],
     summary_hr: null,
     sport: sports[idx],
-    is_transfer: isTransfer(`${i.title} ${titlesHr[idx] ?? ''} ${i.summary ?? ''}`),
+    ...transferFields(`${i.title} ${titlesHr[idx] ?? ''} ${i.summary ?? ''}`),
   }));
 
   const { data: inserted, error } = await supabase
@@ -120,6 +120,11 @@ async function processFeed(feed: FeedRow): Promise<number> {
     await supabase.rpc('finalize_item', { p_item_id: id });
   }
   return inserted?.length ?? 0;
+}
+
+function transferFields(text: string): { is_transfer: boolean; transfer_stage: string | null } {
+  const is = isTransfer(text);
+  return { is_transfer: is, transfer_stage: is ? transferStage(text) : null };
 }
 
 const SPORT_FEED = /sport|telesport|futbol|calcio|fussball/i;
@@ -183,7 +188,7 @@ async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('items')
-      .select('id, url, title, summary, title_hr, summary_hr, sport, is_transfer, sources(default_sport)')
+      .select('id, url, title, summary, title_hr, summary_hr, sport, is_transfer, transfer_stage, sources(default_sport)')
       .order('id')
       .range(from, from + 999);
     if (error) throw error;
@@ -197,10 +202,10 @@ async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
         summary: it.summary_hr ?? it.summary,
         feedSport: src?.default_sport ?? null,
       });
-      const transfer = isTransfer(`${it.title} ${it.title_hr ?? ''} ${it.summary ?? ''}`);
-      if (sport !== it.sport || transfer !== it.is_transfer) {
+      const t = transferFields(`${it.title} ${it.title_hr ?? ''} ${it.summary ?? ''}`);
+      if (sport !== it.sport || t.is_transfer !== it.is_transfer || t.transfer_stage !== it.transfer_stage) {
         changed++;
-        await supabase.from('items').update({ sport, is_transfer: transfer }).eq('id', it.id);
+        await supabase.from('items').update({ sport, ...t }).eq('id', it.id);
       }
     }
   }

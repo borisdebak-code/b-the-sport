@@ -14,6 +14,7 @@ type FeedListProps = {
   query: Omit<FeedQuery, 'before' | 'limit'>;
   header?: ReactElement;
   showSport: boolean;
+  showTransfer?: boolean;
   emptyText: string;
 };
 
@@ -26,6 +27,7 @@ function FeedListInner({
   query,
   header,
   showSport,
+  showTransfer,
   emptyText,
 }: FeedListProps) {
   const p = usePalette();
@@ -117,7 +119,7 @@ function FeedListInner({
     <FlatList
       data={status === 'ready' ? entries : []}
       keyExtractor={(e) => String(e.cluster_id)}
-      renderItem={({ item }) => <NewsCard entry={item} showSport={showSport} />}
+      renderItem={({ item }) => <NewsCard entry={item} showSport={showSport} showTransfer={showTransfer} />}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
       ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.more} color={p.textSecondary} /> : undefined}
