@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "b-the-sport",
+    "name": "B The Sport",
     "slug": "b-the-sport",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +20,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

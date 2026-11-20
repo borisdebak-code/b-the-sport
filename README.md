@@ -1,56 +1,77 @@
-# Welcome to your Expo app 👋
+# B The Sport
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Sportske vijesti s hrvatskih, regionalnih i svjetskih portala i društvenih mreža na jednom mjestu, razvrstane po sportu i prevedene na hrvatski. Aplikacija za Android, iPhone i web (Expo).
 
-## Get started
+## Stanje: faza 1
 
-1. Install dependencies
+| Dio | Stanje |
+| --- | --- |
+| Shema baze (izvori, članci, grupiranje, Hrvati u svijetu, sezonski tabovi) | gotovo, testirano na Postgresu 16 |
+| Povlačenje RSS i YouTube feedova (Edge Function `ingest`) | napisano, testirana logika; čeka Supabase projekt |
+| Određivanje sporta, grupiranje istih vijesti, prijevod | gotovo; prijevod čeka DeepL ključ |
+| Ekrani: sportski tabovi, Portali (Sve/Hrvatska/Regija/Svijet, Hrvati u svijetu), Mreže, Postavke | gotovo |
+| Provjera RSS adresa portala | čeka mrežni pristup portalima |
+
+## Struktura
+
+```
+src/app/            ekrani (Portali = index, mreze, postavke)
+src/components/     zaglavlje sa sportskim tabovima, kartica vijesti, feed
+src/lib/            Supabase klijent, upiti, popis sportova
+supabase/migrations shema baze
+supabase/seed.sql   početni izvori (≈45 portala, 13 YouTube kanala) i hrvatski sportaši u inozemstvu
+supabase/functions  ingest funkcija i zajednička logika (feed, sport, prijevod)
+supabase/tests      testovi baze i logike
+scripts/            provjera feedova
+```
+
+## Pokretanje
+
+1. Otvori besplatni Supabase projekt i u SQL editoru pokreni `supabase/migrations/20261120000001_init.sql`, zatim `supabase/seed.sql`.
+2. Kopiraj `.env.example` u `.env` i upiši URL i ključeve projekta.
+3. Provjeri feedove i spremi ispravne adrese:
 
    ```bash
-   npm install
+   npm run verify-sources -- --write
    ```
 
-2. Start the app
+4. Objavi funkciju i postavi tajne (DeepL ključ je neobavezan; bez njega strane vijesti ostaju na originalnom jeziku):
+
+   ```bash
+   npx supabase functions deploy ingest
+   ```
+
+   ```bash
+   npx supabase secrets set INGEST_SECRET=<nasumičan niz> DEEPL_API_KEY=<ključ>
+   ```
+
+5. U SQL editoru pokreni `supabase/cron.sql` (s upisanim `PROJECT_REF` i `INGEST_SECRET`): povlačenje svakih 5 minuta.
+6. Pokreni aplikaciju i otvori je na Androidu kroz Expo Go:
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Testovi
 
 ```bash
-npm run reset-project
+npm run typecheck
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+```bash
+npm run test:backend
+```
 
-### Other setup steps
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/db_test.sql
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Sezonski tabovi
 
-## Learn more
+- **Zimski sportovi**: automatski od 1. studenog do 31. ožujka.
+- **Vaterpolo**: vidljiv dok traje razdoblje upisano u tablicu `sport_windows` (npr. SP, EP, Olimpijske igre). Izvan toga vijesti idu pod Ostali sportovi.
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```sql
+insert into sport_windows (sport, label, starts_on, ends_on)
+values ('vaterpolo', 'Naziv natjecanja', '<prvi dan>', '<zadnji dan>');  -- datumi su primjer
+```

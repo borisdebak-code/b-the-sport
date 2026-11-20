@@ -1,98 +1,62 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppHeader } from '@/components/app-header';
+import { Chips, type ChipOption } from '@/components/chips';
+import { FeedList } from '@/components/feed-list';
+import { usePalette } from '@/constants/theme';
+import type { Region } from '@/lib/feed';
+import { sportsForTab } from '@/lib/sports';
+import { useAppState } from '@/state/app-state';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+type RegionFilter = Region | 'sve';
+type HrMode = 'portali' | 'hrvati-u-svijetu';
+
+const REGIONS: ChipOption<RegionFilter>[] = [
+  { value: 'sve', label: 'Sve' },
+  { value: 'hr', label: 'Hrvatska' },
+  { value: 'regija', label: 'Regija' },
+  { value: 'svijet', label: 'Svijet' },
+];
+
+const HR_MODES: ChipOption<HrMode>[] = [
+  { value: 'portali', label: 'Hrvatski portali' },
+  { value: 'hrvati-u-svijetu', label: 'Hrvati u svijetu' },
+];
+
+export default function PortaliScreen() {
+  const p = usePalette();
+  const { sport, activeSeasonal, hiddenSources } = useAppState();
+  const [region, setRegion] = useState<RegionFilter>('sve');
+  const [hrMode, setHrMode] = useState<HrMode>('portali');
+
+  const abroad = region === 'hr' && hrMode === 'hrvati-u-svijetu';
+  const query = useMemo(
+    () => ({
+      kind: 'portal' as const,
+      // "Hrvati u svijetu" = regional and world sources mentioning Croatian athletes
+      region: abroad ? null : region === 'sve' ? null : region,
+      croatsAbroad: abroad,
+      sports: sportsForTab(sport, activeSeasonal),
+      hiddenSources,
+    }),
+    [abroad, region, sport, activeSeasonal, hiddenSources],
+  );
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <View style={{ flex: 1, backgroundColor: p.background }}>
+      <AppHeader title="Portali" />
+      <FeedList
+        query={query}
+        showSport={sport === null}
+        emptyText="Za ovaj odabir trenutno nema vijesti."
+        header={
+          <View>
+            <Chips options={REGIONS} value={region} onChange={setRegion} />
+            {region === 'hr' ? <Chips options={HR_MODES} value={hrMode} onChange={setHrMode} compact /> : null}
+          </View>
+        }
+      />
+    </View>
   );
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});

@@ -1,0 +1,5 @@
+project_id = "b-the-sport"
+
+[functions.ingest]
+# The function is called by pg_cron with its own INGEST_SECRET, not a user JWT.
+verify_jwt = false
