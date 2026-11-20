@@ -157,7 +157,60 @@ export function discoverFeeds(html: string, pageUrl: string): string[] {
 }
 
 // YouTube: channel page → channel ID → RSS feed.
+// The page mentions many channels (recommendations), so only the channel's own
+// identifiers count: canonical link, og:url, itemprop identifier, then externalId.
 export function youtubeFeedFromChannelPage(html: string): string | null {
-  const m = html.match(/"(?:channelId|externalId)":"(UC[0-9A-Za-z_-]{22})"/) ?? html.match(/channel\/(UC[0-9A-Za-z_-]{22})/);
-  return m ? `https://www.youtube.com/feeds/videos.xml?channel_id=${m[1]}` : null;
+  const patterns = [
+    /<link rel="canonical" href="https:\/\/www\.youtube\.com\/channel\/(UC[0-9A-Za-z_-]{22})"/,
+    /<meta property="og:url" content="https:\/\/www\.youtube\.com\/channel\/(UC[0-9A-Za-z_-]{22})"/,
+    /<meta itemprop="identifier" content="(UC[0-9A-Za-z_-]{22})"/,
+    /"externalId":"(UC[0-9A-Za-z_-]{22})"/,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m) return `https://www.youtube.com/feeds/videos.xml?channel_id=${m[1]}`;
+  }
+  return null;
+}
+
+// Bluesky: public AppView API, no key needed.
+export const BSKY_API = 'https://public.api.bsky.app/xrpc';
+
+interface BskyPost {
+  post: {
+    uri: string;
+    author: { handle: string };
+    record: { text?: string; createdAt?: string };
+    embed?: {
+      $type?: string;
+      images?: { thumb?: string }[];
+      external?: { uri?: string; title?: string; description?: string; thumb?: string };
+      media?: { images?: { thumb?: string }[]; external?: { thumb?: string } };
+    };
+  };
+  reason?: { $type?: string };
+}
+
+/** Own posts (no reposts or replies) of one account as feed items. */
+export function blueskyItems(feed: { feed?: BskyPost[] }, now: Date = new Date()): FeedItem[] {
+  const out: FeedItem[] = [];
+  for (const f of feed.feed ?? []) {
+    if (f.reason) continue; // repost
+    const p = f.post;
+    const text = (p.record.text ?? '').replace(/\s+/g, ' ').trim();
+    const ext = p.embed?.external;
+    const title = text || ext?.title || '';
+    if (!title) continue;
+    const rkey = p.uri.split('/').pop();
+    const date = p.record.createdAt ? new Date(p.record.createdAt) : now;
+    out.push({
+      url: `https://bsky.app/profile/${p.author.handle}/post/${rkey}`,
+      title: title.length > 220 ? title.slice(0, 217).replace(/\s+\S*$/, '') + '…' : title,
+      summary: ext?.title && ext.title !== title ? ext.title : null,
+      imageUrl: p.embed?.images?.[0]?.thumb ?? ext?.thumb ?? p.embed?.media?.images?.[0]?.thumb ?? p.embed?.media?.external?.thumb ?? null,
+      publishedAt: Number.isNaN(date.getTime()) || date > now ? now : date,
+      categories: [],
+    });
+  }
+  return out;
 }

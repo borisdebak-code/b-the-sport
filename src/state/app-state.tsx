@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { fetchActiveSeasonal, type FeedEntry } from '@/lib/feed';
+import { useSession } from '@/lib/auth';
 import { isWinterSeason, type SportId } from '@/lib/sports';
+import { mergeState, pullUserData, pushLocal, remoteFavorite, remoteHidden, remoteSaved } from '@/lib/sync';
 
 interface AppState {
   /** Selected sport tab, shared by Portali and Mreže. null = "Sve". */
@@ -21,6 +23,9 @@ interface AppState {
   saved: FeedEntry[];
   isSaved: (clusterId: number) => boolean;
   toggleSaved: (e: FeedEntry) => void;
+  /** Signed-in e-mail, when the optional sign-in is used. */
+  userEmail: string | null;
+  syncError: string | null;
 }
 
 export interface Favorite {
@@ -47,6 +52,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [hiddenSources, setHiddenSources] = useState<number[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [saved, setSaved] = useState<FeedEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const session = useSession();
+  const userId = session?.user.id ?? null;
+  const signedIn = useRef(false);
+  useEffect(() => {
+    signedIn.current = !!userId;
+  }, [userId]);
 
   useEffect(() => {
     fetchActiveSeasonal()
@@ -64,8 +77,36 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         if (f) setFavorites(JSON.parse(f));
         if (sv) setSaved(JSON.parse(sv));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
+
+  // On sign-in: merge what is on this device with what the account already has.
+  const local = useRef({ favorites, saved, hiddenSources });
+  useEffect(() => {
+    local.current = { favorites, saved, hiddenSources };
+  }, [favorites, saved, hiddenSources]);
+  useEffect(() => {
+    if (!userId || !loaded) return;
+    let cancelled = false;
+    pullUserData()
+      .then(async (remote) => {
+        if (cancelled) return;
+        await pushLocal(local.current, remote);
+        const merged = mergeState(local.current, remote);
+        setFavorites(merged.favorites);
+        setSaved(merged.saved);
+        setHiddenSources(merged.hiddenSources);
+        persist(FAVORITES_KEY, merged.favorites);
+        persist(SAVED_KEY, merged.saved);
+        persist(HIDDEN_KEY, merged.hiddenSources);
+        setSyncError(null);
+      })
+      .catch((e: unknown) => !cancelled && setSyncError(String((e as Error).message ?? e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, loaded]);
 
   // A seasonal tab that disappears must not stay selected.
   const effectiveSport =
@@ -75,16 +116,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const toggleSource = useCallback((id: number) => {
     setHiddenSources((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const hide = !prev.includes(id);
+      const next = hide ? [...prev, id] : prev.filter((x) => x !== id);
       persist(HIDDEN_KEY, next);
+      if (signedIn.current) remoteHidden(id, hide);
       return next;
     });
   }, []);
 
   const toggleFavorite = useCallback((f: Favorite) => {
     setFavorites((prev) => {
-      const next = prev.some((x) => x.id === f.id) ? prev.filter((x) => x.id !== f.id) : [...prev, f];
+      const on = !prev.some((x) => x.id === f.id);
+      const next = on ? [...prev, f] : prev.filter((x) => x.id !== f.id);
       persist(FAVORITES_KEY, next);
+      if (signedIn.current) remoteFavorite(f.id, on);
       return next;
     });
   }, []);
@@ -92,10 +137,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const toggleSaved = useCallback((e: FeedEntry) => {
     setSaved((prev) => {
-      const next = prev.some((x) => x.cluster_id === e.cluster_id)
-        ? prev.filter((x) => x.cluster_id !== e.cluster_id)
-        : [e, ...prev];
+      const on = !prev.some((x) => x.cluster_id === e.cluster_id);
+      const next = on ? [e, ...prev] : prev.filter((x) => x.cluster_id !== e.cluster_id);
       persist(SAVED_KEY, next);
+      if (signedIn.current) remoteSaved(e, on);
       return next;
     });
   }, []);
@@ -114,8 +159,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       saved,
       isSaved,
       toggleSaved,
+      userEmail: session?.user.email ?? null,
+      syncError,
     }),
-    [effectiveSport, activeSeasonal, hiddenSources, toggleSource, favorites, isFavorite, toggleFavorite, saved, isSaved, toggleSaved],
+    [session, syncError, effectiveSport, activeSeasonal, hiddenSources, toggleSource, favorites, isFavorite, toggleFavorite, saved, isSaved, toggleSaved],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

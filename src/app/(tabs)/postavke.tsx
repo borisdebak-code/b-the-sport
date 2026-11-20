@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { AccountBox } from '@/components/account-box';
 import { AppHeader } from '@/components/app-header';
 import { MaxContentWidth, Spacing, usePalette } from '@/constants/theme';
 import { fetchSources, NotConfiguredError, type SourceRow } from '@/lib/feed';
@@ -43,12 +44,15 @@ export default function PostavkeScreen() {
         keyExtractor={(s) => String(s.id)}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
+          <View>
+          <AccountBox />
           <View style={styles.intro}>
             <Text style={[styles.introTitle, { color: p.text }]}>Izvori</Text>
             <Text style={[styles.introBody, { color: p.textSecondary }]}>
-              Isključeni izvori ne prikazuju se u feedu. Postavka se sprema na ovom uređaju.
+              Isključeni izvori ne prikazuju se u feedu. Postavka se sprema na ovom uređaju, a uz prijavu i na računu.
             </Text>
             {message ? <Text style={[styles.introBody, { color: p.textSecondary }]}>{message}</Text> : null}
+          </View>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -66,7 +70,13 @@ export default function PostavkeScreen() {
                   {!item.verified ? ' · feed nije provjeren' : ''}
                 </Text>
               </View>
-              <Switch value={on} onValueChange={() => toggleSource(item.id)} accessibilityLabel={item.name} />
+              <Switch
+                value={on}
+                onValueChange={() => toggleSource(item.id)}
+                accessibilityLabel={item.name}
+                trackColor={{ true: p.accent, false: p.chip }}
+                thumbColor="#FFFFFF"
+              />
             </View>
           );
         }}

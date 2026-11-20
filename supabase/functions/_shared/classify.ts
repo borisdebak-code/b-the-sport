@@ -38,7 +38,13 @@ const SECTION_WORDS: Record<Exclude<SportId, 'ostalo'>, string[]> = {
 };
 
 // Words in titles/summaries, with weights. Kept specific to avoid false matches.
-const KEYWORDS: Record<Exclude<SportId, 'ostalo'>, [string, number][]> = {
+const KEYWORDS: Record<SportId, [string, number][]> = {
+  // American sports and others that have no tab of their own
+  ostalo: [
+    ['nfl', 3], ['super bowl', 3], ['touchdown', 3], ['quarterback', 3], ['mlb', 3], ['baseball', 3],
+    ['college football', 3], ['cfp', 2], ['sec ', 1], ['fantasy football', 3], ['odbojk', 3], ['volleyball', 3],
+    ['atletik', 3], ['atletic', 3], ['athletics', 3], ['biciklist', 3], ['cycling', 3], ['golf', 3], ['veslan', 3], ['rowing', 3],
+  ],
   nogomet: [
     ['nogomet', 3], ['fudbal', 3], ['football', 2], ['soccer', 3], ['futbol', 3], ['calcio', 3], ['fussball', 3],
     ['hnl', 3], ['supersport hnl', 3], ['dinamo', 1], ['hajduk', 3], ['rijeka', 1], ['osijek', 1],
@@ -158,7 +164,10 @@ export interface ClassifyInput {
   title: string;
   summary?: string | null;
   categories?: string[];
+  /** sport of a sport-specific portal feed: always wins */
   feedSport?: string | null;
+  /** usual sport of a social account: used only when the text names no sport */
+  hintSport?: string | null;
 }
 
 export function classifySport(input: ClassifyInput): SportId {
@@ -169,6 +178,7 @@ export function classifySport(input: ClassifyInput): SportId {
     sportFromUrl(input.url) ??
     sportFromCategories(input.categories ?? []) ??
     sportFromText(`${input.title} ${input.summary ?? ''}`) ??
+    (input.hintSport && (SPORT_IDS as string[]).includes(input.hintSport) ? (input.hintSport as SportId) : null) ??
     'ostalo'
   );
 }
@@ -176,7 +186,7 @@ export function classifySport(input: ClassifyInput): SportId {
 // Transfer news (Transfer centar). Stems match at the start of a word.
 const TRANSFER_WORDS = [
   'transfer', 'here we go', 'potpisa', 'potpisuje', 'prelazi u', 'prelazak', 'pojacanj', 'dovodi', 'doveo', 'dovela',
-  'posudb', 'otkupn', 'odstetn', 'klauzul', 'novi klub', 'napusta', 'signs for', 'signing', 'joins', 'loan move',
+  'posudb', 'otkupn', 'odstetn', 'klauzul', 'novi klub', 'napusta', 'signs for', 'signing', 'joins on loan', 'loan move',
   'agreement reached', 'medical', 'fichaje', 'ficha por', 'traspaso', 'trasferimento', 'calciomercato', 'mercato',
   'wechsel', 'wechselt', 'transferencia', 'contratacao', 'prelaz', 'pojacanje',
 ];

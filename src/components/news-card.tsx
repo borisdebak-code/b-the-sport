@@ -39,7 +39,9 @@ export const NewsCard = memo(function NewsCard({
         <View style={styles.textCol}>
           <View style={styles.metaRow}>
             {showSport && entry.sport !== 'ostalo' ? (
-              <Text style={[styles.sport, { color: p.accent }]}>{SPORT_LABEL[entry.sport] ?? ''}</Text>
+              <Text style={[styles.sport, { color: p.accent }]} numberOfLines={1}>
+                {SPORT_LABEL[entry.sport] ?? ''}
+              </Text>
             ) : null}
             <Text style={[styles.meta, { color: p.textSecondary }]} numberOfLines={1}>
               {entry.source_name} · {relativeTime(entry.published_at)}

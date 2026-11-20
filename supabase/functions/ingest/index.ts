@@ -3,7 +3,7 @@
 // Scheduled every 5 minutes with pg_cron (see supabase/cron.sql).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { classifySport, isTransfer, transferStage } from '../_shared/classify.ts';
-import { discoverFeeds, parseFeed, youtubeFeedFromChannelPage, type FeedItem } from '../_shared/feed.ts';
+import { BSKY_API, blueskyItems, discoverFeeds, parseFeed, youtubeFeedFromChannelPage, type FeedItem } from '../_shared/feed.ts';
 import { needsTranslation, translatorFromEnv } from '../_shared/translate.ts';
 
 const USER_AGENT = 'Mozilla/5.0 (compatible; BTheSport/1.0; personal news reader)';
@@ -24,14 +24,17 @@ async function loadFeeds(): Promise<FeedRow[]> {
   const feeds: FeedRow[] = [];
   const { data: sources, error } = await supabase
     .from('sources')
-    .select('id, lang, kind, network, default_sport, item_url_filter, feed_url, source_feeds(feed_url, sport)')
+    .select('id, lang, kind, network, default_sport, item_url_filter, feed_url, handle, source_feeds(feed_url, sport)')
     .eq('enabled', true)
-    .in('network', ['rss', 'youtube']);
+    .in('network', ['rss', 'youtube', 'bluesky']);
   if (error) throw error;
   for (const s of sources ?? []) {
     const source = { id: s.id, lang: s.lang, kind: s.kind, network: s.network, default_sport: s.default_sport, item_url_filter: s.item_url_filter };
     const extra = (s.source_feeds as { feed_url: string; sport: string | null }[]) ?? [];
-    if (extra.length > 0) {
+    if (s.network === 'bluesky' && s.handle) {
+      const url = `${BSKY_API}/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(s.handle)}&limit=30&filter=posts_no_replies`;
+      feeds.push({ feed_url: url, sport: s.default_sport, source });
+    } else if (extra.length > 0) {
       for (const f of extra) feeds.push({ feed_url: f.feed_url, sport: f.sport, source });
     } else if (s.feed_url) {
       feeds.push({ feed_url: s.feed_url, sport: s.default_sport, source });
@@ -60,7 +63,7 @@ async function newOnly(items: FeedItem[]): Promise<FeedItem[]> {
 async function processFeed(feed: FeedRow): Promise<number> {
   const xml = await fetchFeed(feed.feed_url);
   const filter = feed.source.item_url_filter;
-  const parsed = parseFeed(xml, feed.feed_url)
+  const parsed = (feed.source.network === 'bluesky' ? blueskyItems(JSON.parse(xml)) : parseFeed(xml, feed.feed_url))
     .filter((i) => !filter || i.url.toLowerCase().includes(filter))
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .slice(0, MAX_ITEMS_PER_FEED);
@@ -74,7 +77,9 @@ async function processFeed(feed: FeedRow): Promise<number> {
       title: i.title,
       summary: i.summary,
       categories: i.categories,
-      feedSport: feed.sport ?? feed.source.default_sport,
+      // portal feeds dedicated to one sport decide it; a social account's usual sport is only a hint
+      feedSport: feed.source.kind === 'portal' ? (feed.sport ?? feed.source.default_sport) : null,
+      hintSport: feed.source.kind === 'social' ? feed.source.default_sport : null,
     }),
   );
 
@@ -181,6 +186,30 @@ async function translateBackfill(): Promise<Record<string, number | string>> {
   return out;
 }
 
+// Bluesky discover: find accounts for search terms, with follower counts.
+async function blueskyDiscover(queries: string[]) {
+  const out: Record<string, { handle: string; name: string; followers: number; posts: number }[]> = {};
+  for (const q of queries) {
+    const res = await fetch(`${BSKY_API}/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=5`);
+    const actors = ((await res.json()).actors ?? []) as { did: string }[];
+    if (!actors.length) {
+      out[q] = [];
+      continue;
+    }
+    const prof = await fetch(`${BSKY_API}/app.bsky.actor.getProfiles?${actors.map((a) => `actors=${a.did}`).join('&')}`);
+    const profiles = ((await prof.json()).profiles ?? []) as {
+      handle: string;
+      displayName?: string;
+      followersCount?: number;
+      postsCount?: number;
+    }[];
+    out[q] = profiles
+      .map((p) => ({ handle: p.handle, name: p.displayName ?? '', followers: p.followersCount ?? 0, posts: p.postsCount ?? 0 }))
+      .sort((a, b) => b.followers - a.followers);
+  }
+  return out;
+}
+
 // Reclassify mode: re-run sport classification over stored items (after keyword changes).
 async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
   let checked = 0;
@@ -188,19 +217,20 @@ async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('items')
-      .select('id, url, title, summary, title_hr, summary_hr, sport, is_transfer, transfer_stage, sources(default_sport)')
+      .select('id, url, title, summary, title_hr, summary_hr, sport, is_transfer, transfer_stage, sources(default_sport, kind)')
       .order('id')
       .range(from, from + 999);
     if (error) throw error;
     if (!data || data.length === 0) break;
     for (const it of data) {
       checked++;
-      const src = it.sources as unknown as { default_sport: string | null } | null;
+      const src = it.sources as unknown as { default_sport: string | null; kind: string } | null;
       const sport = classifySport({
         url: it.url,
         title: it.title_hr ?? it.title,
         summary: it.summary_hr ?? it.summary,
-        feedSport: src?.default_sport ?? null,
+        feedSport: src?.kind === 'portal' ? (src?.default_sport ?? null) : null,
+        hintSport: src?.kind === 'social' ? (src?.default_sport ?? null) : null,
       });
       const t = transferFields(`${it.title} ${it.title_hr ?? ''} ${it.summary ?? ''}`);
       if (sport !== it.sport || t.is_transfer !== it.is_transfer || t.transfer_stage !== it.transfer_stage) {
@@ -281,6 +311,9 @@ Deno.serve(async (req) => {
   }
   if (body?.mode === 'translate-backfill') {
     return Response.json(await translateBackfill());
+  }
+  if (body?.mode === 'bluesky-discover') {
+    return Response.json(await blueskyDiscover(body.queries ?? []));
   }
   if (body?.mode === 'reclassify') {
     return Response.json(await reclassifyAll());

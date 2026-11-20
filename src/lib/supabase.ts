@@ -12,9 +12,13 @@ export const supabase: SupabaseClient | null =
   url && anonKey
     ? createClient(url, anonKey, {
         auth: {
+          // the sign-in is optional; when used it stays on the device
           storage: Platform.OS === 'web' ? undefined : AsyncStorage,
-          persistSession: false,
-          autoRefreshToken: false,
+          persistSession: true,
+          autoRefreshToken: true,
+          // native: the sign-in link is handled by handleAuthUrl (deep link)
+          detectSessionInUrl: Platform.OS === 'web',
+          flowType: 'implicit',
         },
       })
     : null;

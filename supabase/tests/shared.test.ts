@@ -25,12 +25,12 @@ test('sport from text keywords', () => {
   assert.equal(sportFromText('Verstappen osvojio pole position za Veliku nagradu'), 'f1moto');
   assert.equal(sportFromText('UFC 320: nokaut u prvoj rundi'), 'borilacki');
   assert.equal(sportFromText('Zrinka Ljutić pobijedila u slalomu'), 'zimski');
-  assert.equal(sportFromText('Atletičarka oborila nacionalni rekord'), null);
+  assert.equal(sportFromText('Atletičarka oborila nacionalni rekord'), 'ostalo');
   // regressions from the first real ingest
   assert.equal(sportFromText('Lokomotiva dovela bivšeg veznjaka Inter Miamija'), 'nogomet');
   assert.equal(sportFromText('Pašalićev Orlando ispao iz play-offa MLS-a'), 'nogomet');
   assert.equal(sportFromText('Niko Pulić i Ivica Kostelić zvijezde Rallyja Santa Domenica'), 'f1moto');
-  assert.equal(sportFromText('Odbojkaši Mladosti uvjerljivi u Mađarskoj'), null);
+  assert.equal(sportFromText('Odbojkaši Mladosti uvjerljivi u Mađarskoj'), 'ostalo');
 });
 
 test('classifySport precedence', () => {
@@ -115,7 +115,7 @@ test('feed autodiscovery and YouTube channel id', () => {
   const html = `<head><link rel="alternate" type="application/rss+xml" title="Sport" href="/rss/sport">
     <link rel="stylesheet" href="/a.css"></head>`;
   assert.deepEqual(discoverFeeds(html, 'https://www.index.hr/sport'), ['https://www.index.hr/rss/sport']);
-  const page = '{"externalId":"UCabcdefghijklmnopqrstuv"}';
+  const page = '{"channelId":"UCzzzzzzzzzzzzzzzzzzzzzz"} <link rel="canonical" href="https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv">';
   assert.equal(youtubeFeedFromChannelPage(page), 'https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv');
 });
 
@@ -139,4 +139,11 @@ test('transfer stage', () => {
   assert.equal(transferStage('Dinamo i Lyon postigli dogovor oko transfera'), 'dogovor');
   assert.equal(transferStage('Arsenal want World Cup winner Williams'), 'pregovori');
   assert.equal(transferStage('Mercado de fichajes: rumores del día'), 'glasina');
+});
+
+test('social account sport is only a hint', () => {
+  const nfl = { url: 'https://youtube.com/watch?v=1', title: 'Why the Texans might not make the NFL Playoffs', hintSport: 'nogomet' };
+  assert.equal(classifySport(nfl), 'ostalo');
+  assert.equal(classifySport({ url: 'https://youtube.com/watch?v=2', title: 'Best moments of the week', hintSport: 'nogomet' }), 'nogomet');
+  assert.equal(isTransfer('Legendary writer John McClain joins the show this morning'), false);
 });

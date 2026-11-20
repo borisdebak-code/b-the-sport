@@ -8,17 +8,19 @@ import { Spacing, usePalette } from '@/constants/theme';
 import { sportsForTab } from '@/lib/sports';
 import { useAppState } from '@/state/app-state';
 
-type Network = 'sve' | 'youtube' | 'instagram' | 'x' | 'facebook';
+type Network = 'sve' | 'youtube' | 'bluesky' | 'instagram' | 'x' | 'facebook';
 
 const NETWORKS: ChipOption<Network>[] = [
   { value: 'sve', label: 'Sve' },
   { value: 'youtube', label: 'YouTube' },
+  { value: 'bluesky', label: 'Bluesky' },
   { value: 'instagram', label: 'Instagram' },
   { value: 'x', label: 'X' },
   { value: 'facebook', label: 'Facebook' },
 ];
 
 const COMING: Partial<Record<Network, string>> = {
+  bluesky: 'Na Blueskyju pratimo samo račune potvrđene vlastitom domenom: The Athletic, Guardian Sport i Bloody Elbow.',
   instagram: 'Instagram stiže u fazi 2, kad se tvoj profil prebaci u Creator tip i poveže.',
   x: 'X je planiran za fazu 3 jer besplatni API ne omogućuje čitanje tuđih objava.',
   facebook: 'Facebook je planiran za fazu 3, nakon Metinog odobrenja.',
