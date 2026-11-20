@@ -249,3 +249,31 @@ export function instagramItems(json: { business_discovery?: { media?: { data?: I
   }
   return out;
 }
+
+// Portals without RSS: article links on a section page. Only anchors whose path matches
+// `pattern` count; the anchor text is the headline. There is no date, so items get "now"
+// when first seen, which is when they appear on the portal's page.
+const SECTION_PREFIX =
+  /^(Nogomet|Košarka|Rokomet|Rukomet|Tenis|Zimski športi|Moto šport|Formula 1|Odbojka|Hokej|Kolesarstvo|Atletika|Borilni športi|Ostali športi)\s+/;
+
+export function htmlItems(html: string, pageUrl: string, pattern: RegExp, now: Date = new Date()): FeedItem[] {
+  const seen = new Set<string>();
+  const out: FeedItem[] = [];
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const url = absolutize(m[1].replace(/&amp;/g, '&'), pageUrl);
+    let path: string;
+    try {
+      path = new URL(url).pathname;
+    } catch {
+      continue;
+    }
+    if (!pattern.test(path) || seen.has(url)) continue;
+    // cards often wrap category, author and time in the same link: prefer its heading
+    const heading = m[2].match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i);
+    const title = stripHtml(heading ? heading[1] : m[2]).replace(SECTION_PREFIX, '').trim();
+    if (title.length < 25) continue; // image links, "više" buttons
+    seen.add(url);
+    out.push({ url, title, summary: null, imageUrl: null, publishedAt: now, categories: [] });
+  }
+  return out;
+}

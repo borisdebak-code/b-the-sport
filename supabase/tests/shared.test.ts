@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifySport, isTransfer, sportFromText, sportFromUrl, transferStage } from '../functions/_shared/classify.ts';
-import { blueskyItems, discoverFeeds, instagramItems, parseFeed, shortSummary, youtubeFeedFromChannelPage } from '../functions/_shared/feed.ts';
+import { blueskyItems, discoverFeeds, htmlItems, instagramItems, parseFeed, shortSummary, youtubeFeedFromChannelPage } from '../functions/_shared/feed.ts';
 import { needsTranslation } from '../functions/_shared/translate.ts';
 
 test('sport from portal URL sections', () => {
@@ -178,4 +178,18 @@ test('bluesky author feed skips reposts', () => {
   } as never, new Date('2026-11-20T00:00:00Z'));
   assert.equal(items.length, 1);
   assert.equal(items[0].url, 'https://bsky.app/profile/theathletic.com/post/abc');
+});
+
+test('article links from a section page', () => {
+  const html = `<a href="/nogomet/vijesti/nakon-118-dana-bruno-petkovic-se-vratio-treninzima/169712">Nakon 118 dana Bruno Petković se vratio treninzima</a>
+    <a href="/nogomet/vijesti/nakon-118-dana-bruno-petkovic-se-vratio-treninzima/169712"><img src="x.jpg"></a>
+    <a href="/kontakt">Kontaktirajte nas za sve upite i suradnju s portalom</a>
+    <a href="https://ekipa.svet24.si/sport/kosarka/doncic-zvezdnik-1942056">Košarka Zaradi Dončića znorel tudi ta zvezdnik iz lige NBA</a>`;
+  const g = htmlItems(html, 'https://www.germanijak.hr/', /\/vijesti\/[a-z0-9-]+\/\d+$/);
+  assert.equal(g.length, 1);
+  assert.equal(g[0].url, 'https://www.germanijak.hr/nogomet/vijesti/nakon-118-dana-bruno-petkovic-se-vratio-treninzima/169712');
+  const e = htmlItems(html, 'https://ekipa.svet24.si/', /^\/sport\/.+-\d{6,}$/);
+  assert.equal(e[0].title, 'Zaradi Dončića znorel tudi ta zvezdnik iz lige NBA');
+  const card = '<a href="/sport/nogomet/nejevolja-1942100"><span>Robert Balantič</span><span>danes ob 14:24</span><h3>Nejevolja po pokalnem vikendu - je bilo tega res treba</h3></a>';
+  assert.equal(htmlItems(card, 'https://ekipa.svet24.si/', /^\/sport\/.+-\d{6,}$/)[0].title, 'Nejevolja po pokalnem vikendu - je bilo tega res treba');
 });

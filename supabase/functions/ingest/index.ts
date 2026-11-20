@@ -8,6 +8,7 @@ import {
   blueskyItems,
   discoverFeeds,
   GRAPH_VERSION,
+  htmlItems,
   instagramItems,
   parseFeed,
   youtubeFeedFromChannelPage,
@@ -21,7 +22,15 @@ const MAX_ITEMS_PER_FEED = 40;
 interface FeedRow {
   feed_url: string;
   sport: string | null;
-  source: { id: number; lang: string; kind: string; network: string; default_sport: string | null; item_url_filter: string | null };
+  source: {
+    id: number;
+    lang: string;
+    kind: string;
+    network: string;
+    default_sport: string | null;
+    item_url_filter: string | null;
+    link_pattern: string | null;
+  };
 }
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -35,12 +44,12 @@ async function loadFeeds(): Promise<FeedRow[]> {
   const feeds: FeedRow[] = [];
   const { data: sources, error } = await supabase
     .from('sources')
-    .select('id, lang, kind, network, default_sport, item_url_filter, feed_url, handle, source_feeds(feed_url, sport)')
+    .select('id, lang, kind, network, default_sport, item_url_filter, link_pattern, feed_url, handle, source_feeds(feed_url, sport)')
     .eq('enabled', true)
-    .in('network', ['rss', 'youtube', 'bluesky', 'instagram']);
+    .in('network', ['rss', 'html', 'youtube', 'bluesky', 'instagram']);
   if (error) throw error;
   for (const s of sources ?? []) {
-    const source = { id: s.id, lang: s.lang, kind: s.kind, network: s.network, default_sport: s.default_sport, item_url_filter: s.item_url_filter };
+    const source = { id: s.id, lang: s.lang, kind: s.kind, network: s.network, default_sport: s.default_sport, item_url_filter: s.item_url_filter, link_pattern: s.link_pattern };
     const extra = (s.source_feeds as { feed_url: string; sport: string | null }[]) ?? [];
     if (s.network === 'instagram' && s.handle) {
       // Business Discovery: 200 calls/hour per token, so every third run (≈ every 15 min)
@@ -101,6 +110,8 @@ async function instagramSetup() {
   await setSetting('ig_user_id', page.instagram_business_account.id);
   await setSetting('ig_username', page.instagram_business_account.username ?? '');
   await setSetting('ig_page_token', page.access_token);
+  // the Instagram sources stay switched off until this setup succeeds
+  await supabase.from('sources').update({ enabled: true }).eq('network', 'instagram');
   const test = await instagramFeed('433').then((items) => items.length).catch((e) => String(e));
   return { ok: true, page: page.name, instagram: page.instagram_business_account.username, test433: test };
 }
@@ -130,7 +141,9 @@ async function processFeed(feed: FeedRow): Promise<number> {
       ? await instagramFeed(feed.feed_url.slice('instagram:'.length))
       : feed.source.network === 'bluesky'
         ? blueskyItems(JSON.parse(xml))
-        : parseFeed(xml, feed.feed_url)
+        : feed.source.network === 'html' && feed.source.link_pattern
+          ? htmlItems(xml, feed.feed_url, new RegExp(feed.source.link_pattern))
+          : parseFeed(xml, feed.feed_url)
   )
     .filter((i) => !filter || i.url.toLowerCase().includes(filter))
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
@@ -379,6 +392,24 @@ Deno.serve(async (req) => {
   }
   if (body?.mode === 'translate-backfill') {
     return Response.json(await translateBackfill());
+  }
+  if (body?.mode === 'probe') {
+    // diagnostics for portals without RSS: status and the links that look like articles
+    const out: Record<string, unknown> = {};
+    for (const u of (body.urls ?? []) as string[]) {
+      try {
+        const res = await fetch(u, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(15_000) });
+        const html = await res.text();
+        const links = [...html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+          .map((m) => [m[1], m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()])
+          .filter(([, t]) => t.length > 35)
+          .slice(0, 8);
+        out[u] = { status: res.status, length: html.length, feeds: discoverFeeds(html, u), links };
+      } catch (e) {
+        out[u] = String(e);
+      }
+    }
+    return Response.json(out);
   }
   if (body?.mode === 'instagram-setup') {
     return Response.json(await instagramSetup().catch((e) => ({ ok: false, error: String(e) })));

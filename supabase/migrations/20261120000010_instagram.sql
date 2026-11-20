@@ -25,3 +25,6 @@ insert into public.sources (slug, name, kind, network, region, country, lang, ho
 ('ig-f1',             'Formula 1',          'social', 'instagram', 'svijet', 'INT', 'en', 'https://www.instagram.com/f1/',             'f1',             'f1moto',    1),
 ('ig-ufc',            'UFC',                'social', 'instagram', 'svijet', 'US',  'en', 'https://www.instagram.com/ufc/',            'ufc',            'borilacki', 1)
 on conflict (slug) do nothing;
+
+-- Off until the owner's token is set up (mode instagram-setup switches them on).
+update public.sources set enabled = false where network = 'instagram';
