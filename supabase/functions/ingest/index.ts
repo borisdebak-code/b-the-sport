@@ -2,7 +2,7 @@
 // stores new items and clusters them into stories.
 // Scheduled every 5 minutes with pg_cron (see supabase/cron.sql).
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { classifySport } from '../_shared/classify.ts';
+import { classifySport, isTransfer } from '../_shared/classify.ts';
 import { discoverFeeds, parseFeed, youtubeFeedFromChannelPage, type FeedItem } from '../_shared/feed.ts';
 import { needsTranslation, translatorFromEnv } from '../_shared/translate.ts';
 
@@ -107,6 +107,7 @@ async function processFeed(feed: FeedRow): Promise<number> {
     title_hr: titlesHr[idx],
     summary_hr: null,
     sport: sports[idx],
+    is_transfer: isTransfer(`${i.title} ${titlesHr[idx] ?? ''} ${i.summary ?? ''}`),
   }));
 
   const { data: inserted, error } = await supabase
@@ -141,6 +142,40 @@ function urlFilterFor(homepage: string | null, feedUrl: string): string | null {
   return path && path !== '' ? `${path.toLowerCase()}/` : null;
 }
 
+// Translate-backfill mode: translate recent sport titles that arrived without a translation.
+async function translateBackfill(): Promise<Record<string, number | string>> {
+  if (!translator) return { error: 'no translator configured' };
+  const { data, error } = await supabase
+    .from('items')
+    .select('id, title, lang')
+    .is('title_hr', null)
+    .not('lang', 'in', '(hr,sr,bs,cnr)')
+    .neq('sport', 'ostalo')
+    .gt('published_at', new Date(Date.now() - 2 * 864e5).toISOString())
+    .limit(1000);
+  if (error) throw error;
+  const byLang = new Map<string, { id: number; title: string }[]>();
+  for (const r of data ?? []) byLang.set(r.lang, [...(byLang.get(r.lang) ?? []), r]);
+  const out: Record<string, number | string> = {};
+  for (const [lang, rows] of byLang) {
+    for (let k = 0; k < rows.length; k += 50) {
+      const batch = rows.slice(k, k + 50);
+      const chars = batch.reduce((n, r) => n + r.title.length, 0);
+      const { data: allowed } = await supabase.rpc('reserve_translation_chars', { p_chars: chars });
+      if (!allowed) {
+        out[lang] = 'budget reached';
+        break;
+      }
+      const tr = await translator.translate(batch.map((r) => r.title), lang);
+      for (let j = 0; j < batch.length; j++) {
+        await supabase.from('items').update({ title_hr: tr[j] }).eq('id', batch[j].id);
+      }
+      out[lang] = ((out[lang] as number) || 0) + batch.length;
+    }
+  }
+  return out;
+}
+
 // Reclassify mode: re-run sport classification over stored items (after keyword changes).
 async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
   let checked = 0;
@@ -148,7 +183,7 @@ async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('items')
-      .select('id, url, title, summary, title_hr, summary_hr, sport, sources(default_sport)')
+      .select('id, url, title, summary, title_hr, summary_hr, sport, is_transfer, sources(default_sport)')
       .order('id')
       .range(from, from + 999);
     if (error) throw error;
@@ -162,9 +197,10 @@ async function reclassifyAll(): Promise<{ checked: number; changed: number }> {
         summary: it.summary_hr ?? it.summary,
         feedSport: src?.default_sport ?? null,
       });
-      if (sport !== it.sport) {
+      const transfer = isTransfer(`${it.title} ${it.title_hr ?? ''} ${it.summary ?? ''}`);
+      if (sport !== it.sport || transfer !== it.is_transfer) {
         changed++;
-        await supabase.from('items').update({ sport }).eq('id', it.id);
+        await supabase.from('items').update({ sport, is_transfer: transfer }).eq('id', it.id);
       }
     }
   }
@@ -237,6 +273,9 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body?.mode === 'verify') {
     return Response.json(await verifySources());
+  }
+  if (body?.mode === 'translate-backfill') {
+    return Response.json(await translateBackfill());
   }
   if (body?.mode === 'reclassify') {
     return Response.json(await reclassifyAll());

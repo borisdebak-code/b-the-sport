@@ -27,7 +27,9 @@ export interface FeedEntry {
 }
 
 export interface FeedQuery {
-  kind: 'portal' | 'social';
+  kind: 'portal' | 'social' | null;
+  entityIds?: number[] | null;
+  transfers?: boolean;
   region?: Region | null;
   sports?: SportId[] | null;
   croatsAbroad?: boolean;
@@ -50,6 +52,8 @@ export async function fetchFeed(q: FeedQuery): Promise<FeedEntry[]> {
     p_hidden_sources: q.hiddenSources ?? [],
     p_before: q.before ?? null,
     p_limit: q.limit ?? 30,
+    p_entity_ids: q.entityIds ?? null,
+    p_transfers: q.transfers ?? false,
   });
   if (error) throw new Error(error.message);
   return (data ?? []) as FeedEntry[];
@@ -98,4 +102,25 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   if (d.getTime() >= startOfToday) return `danas u ${hhmm}`;
   if (d.getTime() >= startOfToday - 864e5) return `jučer u ${hhmm}`;
   return `${d.getDate()}. ${d.getMonth() + 1}. u ${hhmm}`;
+}
+
+export interface EntityRow {
+  id: number;
+  name: string;
+  kind: 'athlete' | 'club' | 'national_team';
+  sport: SportId;
+}
+
+export async function fetchEntities(): Promise<EntityRow[]> {
+  if (!supabase) throw new NotConfiguredError('Supabase nije povezan');
+  const { data, error } = await supabase.from('followable_entities').select('id, name, kind, sport').order('name');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as EntityRow[];
+}
+
+/** Summer (1 Jun – 1 Sep) and winter (January) transfer windows of most European leagues. */
+export function isTransferWindow(day: Date = new Date()): boolean {
+  const m = day.getMonth() + 1;
+  const d = day.getDate();
+  return m === 1 || (m >= 6 && m <= 8) || (m === 9 && d === 1);
 }

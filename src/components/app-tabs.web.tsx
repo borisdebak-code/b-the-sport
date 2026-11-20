@@ -20,6 +20,9 @@ export default function AppTabs() {
             <TabTrigger name="mreze" href="/mreze" asChild>
               <TabButton path="/mreze">Mreže</TabButton>
             </TabTrigger>
+            <TabTrigger name="spremljeno" href="/spremljeno" asChild>
+              <TabButton path="/spremljeno">Spremljeno</TabButton>
+            </TabTrigger>
             <TabTrigger name="postavke" href="/postavke" asChild>
               <TabButton path="/postavke">Postavke</TabButton>
             </TabTrigger>
@@ -59,7 +62,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     paddingBottom: Spacing.one,
     alignItems: 'center',
-    minWidth: 88,
+    minWidth: 72,
   },
   label: {
     color: C.headerMuted,

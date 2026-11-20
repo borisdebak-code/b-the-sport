@@ -10,17 +10,24 @@ const PAGE = 30;
 
 type Status = 'loading' | 'ready' | 'error' | 'not-configured';
 
-export function FeedList({
-  query,
-  header,
-  showSport,
-  emptyText,
-}: {
+type FeedListProps = {
   query: Omit<FeedQuery, 'before' | 'limit'>;
   header?: ReactElement;
   showSport: boolean;
   emptyText: string;
-}) {
+};
+
+/** Remounts per query, so a new filter starts from a clean loading state. */
+export function FeedList(props: FeedListProps) {
+  return <FeedListInner key={JSON.stringify(props.query)} {...props} />;
+}
+
+function FeedListInner({
+  query,
+  header,
+  showSport,
+  emptyText,
+}: FeedListProps) {
   const p = usePalette();
   const [entries, setEntries] = useState<FeedEntry[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -32,10 +39,9 @@ export function FeedList({
   const reqId = useRef(0);
 
   const load = useCallback(
-    async (mode: 'reset' | 'refresh') => {
+    async () => {
       const id = ++reqId.current;
-      if (mode === 'reset') setStatus('loading');
-      else setRefreshing(true);
+      setRefreshing(true);
       try {
         const rows = await fetchFeed({ ...JSON.parse(key), limit: PAGE });
         if (id !== reqId.current) return;
@@ -55,8 +61,21 @@ export function FeedList({
   );
 
   useEffect(() => {
-    load('reset');
-  }, [load]);
+    // initial status is 'loading'; state is only set when the fetch settles
+    const id = ++reqId.current;
+    fetchFeed({ ...JSON.parse(key), limit: PAGE })
+      .then((rows) => {
+        if (id !== reqId.current) return;
+        setEntries(rows);
+        setDone(rows.length < PAGE);
+        setStatus('ready');
+      })
+      .catch((e: unknown) => {
+        if (id !== reqId.current) return;
+        setStatus(e instanceof NotConfiguredError ? 'not-configured' : 'error');
+        setError(String((e as Error).message ?? e));
+      });
+  }, [key]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || done || status !== 'ready' || entries.length === 0) return;
@@ -104,7 +123,7 @@ export function FeedList({
       ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.more} color={p.textSecondary} /> : undefined}
       onEndReached={loadMore}
       onEndReachedThreshold={0.6}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
       contentContainerStyle={styles.content}
       style={{ backgroundColor: p.background }}
     />

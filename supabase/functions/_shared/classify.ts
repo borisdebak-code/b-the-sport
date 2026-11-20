@@ -172,3 +172,16 @@ export function classifySport(input: ClassifyInput): SportId {
     'ostalo'
   );
 }
+
+// Transfer news (Transfer centar). Stems match at the start of a word.
+const TRANSFER_WORDS = [
+  'transfer', 'here we go', 'potpisa', 'potpisuje', 'prelazi u', 'prelazak', 'pojacanj', 'dovodi', 'doveo', 'dovela',
+  'posudb', 'otkupn', 'odstetn', 'klauzul', 'novi klub', 'napusta', 'signs for', 'signing', 'joins', 'loan move',
+  'agreement reached', 'medical', 'fichaje', 'ficha por', 'traspaso', 'trasferimento', 'calciomercato', 'mercato',
+  'wechsel', 'wechselt', 'transferencia', 'contratacao', 'prelaz', 'pojacanje',
+];
+
+export function isTransfer(text: string): boolean {
+  const hay = normalize(text);
+  return TRANSFER_WORDS.some((w) => hasWord(hay, w));
+}

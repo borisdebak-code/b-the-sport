@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { memo, useState } from 'react';
@@ -6,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Spacing, usePalette } from '@/constants/theme';
 import { relativeTime, type FeedEntry } from '@/lib/feed';
 import { SPORT_LABEL } from '@/lib/sports';
+import { useAppState } from '@/state/app-state';
 
 function open(url: string) {
   WebBrowser.openBrowserAsync(url).catch(() => {});
@@ -17,6 +19,8 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
   const [showOriginal, setShowOriginal] = useState(false);
   const extra = entry.source_count - 1;
   const title = showOriginal ? entry.original_title : entry.title;
+  const { isSaved, toggleSaved } = useAppState();
+  const saved = isSaved(entry.cluster_id);
 
   return (
     <View style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
@@ -29,6 +33,14 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
             <Text style={[styles.meta, { color: p.textSecondary }]} numberOfLines={1}>
               {entry.source_name} · {relativeTime(entry.published_at)}
             </Text>
+            <Pressable
+              onPress={() => toggleSaved(entry)}
+              hitSlop={12}
+              style={styles.save}
+              accessibilityRole="button"
+              accessibilityLabel={saved ? 'Ukloni iz spremljenih' : 'Spremi'}>
+              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={16} color={saved ? p.accent : p.textSecondary} />
+            </Pressable>
           </View>
           <Text style={[styles.title, { color: p.text }]} numberOfLines={4}>
             {title}
@@ -46,16 +58,17 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
       </Pressable>
 
       {extra > 0 || entry.translated ? (
-        <View style={[styles.footer, { borderTopColor: p.border }]}>
-          {extra > 0 ? (
-            <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={8}>
-              <Text style={[styles.footerLink, { color: p.text }]}>
-                {expanded ? 'Sakrij izvore' : `+${extra} ${extra % 10 === 1 && extra % 100 !== 11 ? 'izvor' : 'izvora'}`}
-              </Text>
-            </Pressable>
-          ) : (
-            <View />
-          )}
+      <View style={[styles.footer, { borderTopColor: p.border }]}>
+        {extra > 0 ? (
+          <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={8}>
+            <Text style={[styles.footerLink, { color: p.text }]}>
+              {expanded ? 'Sakrij izvore' : `+${extra} ${extra % 10 === 1 && extra % 100 !== 11 ? 'izvor' : 'izvora'}`}
+            </Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
+        <View style={styles.footerRight}>
           {entry.translated ? (
             <Pressable onPress={() => setShowOriginal((v) => !v)} hitSlop={8}>
               <Text style={[styles.footerMuted, { color: p.textSecondary }]}>
@@ -64,6 +77,7 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
             </Pressable>
           ) : null}
         </View>
+      </View>
       ) : null}
 
       {expanded ? (
@@ -135,6 +149,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  save: {
+    marginLeft: 'auto',
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.four,
   },
   footerLink: {
     fontSize: 13,

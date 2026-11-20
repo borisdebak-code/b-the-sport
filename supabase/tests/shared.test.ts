@@ -1,7 +1,7 @@
 // Unit tests for the ingest logic. Run: npm run test:backend
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifySport, sportFromText, sportFromUrl } from '../functions/_shared/classify.ts';
+import { classifySport, isTransfer, sportFromText, sportFromUrl } from '../functions/_shared/classify.ts';
 import { discoverFeeds, parseFeed, shortSummary, youtubeFeedFromChannelPage } from '../functions/_shared/feed.ts';
 import { needsTranslation } from '../functions/_shared/translate.ts';
 
@@ -123,4 +123,12 @@ test('translation only for languages outside hr/sr/bs/cnr', () => {
   assert.equal(needsTranslation('sr'), false);
   assert.equal(needsTranslation('sl'), true);
   assert.equal(needsTranslation('en'), true);
+});
+
+test('transfer detection', () => {
+  assert.equal(isTransfer('Here we go! Gvardiol to Real Madrid'), true);
+  assert.equal(isTransfer('Dinamo dovodi napadača iz Belgije'), true);
+  assert.equal(isTransfer('Hajduk potpisao mladog veznjaka'), true);
+  assert.equal(isTransfer('Fichaje cerrado: el Barça paga 40 millones'), true);
+  assert.equal(isTransfer('Dinamo pobijedio Hajduk u derbiju'), false);
 });

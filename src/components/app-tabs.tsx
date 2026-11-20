@@ -20,6 +20,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right" md="forum" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="spremljeno">
+        <NativeTabs.Trigger.Label>Spremljeno</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="bookmark" md="bookmark" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="postavke">
         <NativeTabs.Trigger.Label>Postavke</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="gearshape" md="settings" />
