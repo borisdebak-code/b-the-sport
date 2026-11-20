@@ -1,3 +1,8 @@
+import {
+  BarlowCondensed_700Bold,
+  BarlowCondensed_900Black_Italic,
+  useFonts,
+} from '@expo-google-fonts/barlow-condensed';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -12,9 +17,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // the logo font is bundled with the app, so this resolves almost instantly
+  const [fontsLoaded, fontError] = useFonts({ BarlowCondensed_700Bold, BarlowCondensed_900Black_Italic });
+  const ready = fontsLoaded || !!fontError;
   useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+  if (!ready) return null;
 
   return (
     <SafeAreaProvider>

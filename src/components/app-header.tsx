@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { Logo } from '@/components/logo';
 import { visibleTabs } from '@/lib/sports';
 import { useAppState } from '@/state/app-state';
 
@@ -19,9 +20,7 @@ export function AppHeader({ title }: { title: string }) {
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + Spacing.two }]}>
       <View style={styles.brandRow}>
-        <Text style={styles.brand}>
-          B <Text style={styles.brandAccent}>The</Text> Sport
-        </Text>
+        <Logo size={30} />
         <View style={styles.brandRight}>
           <Text style={styles.section}>{title}</Text>
           <Pressable
@@ -79,19 +78,10 @@ const styles = StyleSheet.create({
   },
   brandRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     marginBottom: Spacing.three,
-  },
-  brand: {
-    color: C.headerText,
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  brandAccent: {
-    color: C.accent,
   },
   brandRight: {
     flexDirection: 'row',
