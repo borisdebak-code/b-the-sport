@@ -214,3 +214,38 @@ export function blueskyItems(feed: { feed?: BskyPost[] }, now: Date = new Date()
   }
   return out;
 }
+
+// Instagram Graph API, Business Discovery of a public Business/Creator account.
+export const GRAPH_VERSION = 'v23.0';
+
+interface IgMedia {
+  caption?: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+}
+
+/** Posts of one account (business_discovery.media) as feed items. */
+export function instagramItems(json: { business_discovery?: { media?: { data?: IgMedia[] } } }, now: Date = new Date()): FeedItem[] {
+  const out: FeedItem[] = [];
+  for (const m of json.business_discovery?.media?.data ?? []) {
+    if (!m.permalink) continue;
+    const caption = (m.caption ?? '').replace(/\s+/g, ' ').trim();
+    // first sentence or line of the caption is the headline
+    const firstLine = (m.caption ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+    const title = (firstLine || caption).slice(0, 220);
+    if (!title) continue;
+    const date = m.timestamp ? new Date(m.timestamp) : now;
+    out.push({
+      url: m.permalink,
+      title: title.length === 220 ? title.replace(/\s+\S*$/, '') + '…' : title,
+      summary: caption.length > title.length ? shortSummary(caption.slice(title.length)) : null,
+      imageUrl: m.media_type === 'VIDEO' ? (m.thumbnail_url ?? null) : (m.media_url ?? m.thumbnail_url ?? null),
+      publishedAt: Number.isNaN(date.getTime()) || date > now ? now : date,
+      categories: [],
+    });
+  }
+  return out;
+}

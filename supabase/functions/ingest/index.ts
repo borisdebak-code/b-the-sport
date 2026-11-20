@@ -3,7 +3,16 @@
 // Scheduled every 5 minutes with pg_cron (see supabase/cron.sql).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { classifySport, isTransfer, transferStage } from '../_shared/classify.ts';
-import { BSKY_API, blueskyItems, discoverFeeds, parseFeed, youtubeFeedFromChannelPage, type FeedItem } from '../_shared/feed.ts';
+import {
+  BSKY_API,
+  blueskyItems,
+  discoverFeeds,
+  GRAPH_VERSION,
+  instagramItems,
+  parseFeed,
+  youtubeFeedFromChannelPage,
+  type FeedItem,
+} from '../_shared/feed.ts';
 import { needsTranslation, translatorFromEnv } from '../_shared/translate.ts';
 
 const USER_AGENT = 'Mozilla/5.0 (compatible; BTheSport/1.0; personal news reader)';
@@ -20,18 +29,24 @@ const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPAB
 });
 const translator = translatorFromEnv((k) => Deno.env.get(k));
 
+let includeInstagram = false;
+
 async function loadFeeds(): Promise<FeedRow[]> {
   const feeds: FeedRow[] = [];
   const { data: sources, error } = await supabase
     .from('sources')
     .select('id, lang, kind, network, default_sport, item_url_filter, feed_url, handle, source_feeds(feed_url, sport)')
     .eq('enabled', true)
-    .in('network', ['rss', 'youtube', 'bluesky']);
+    .in('network', ['rss', 'youtube', 'bluesky', 'instagram']);
   if (error) throw error;
   for (const s of sources ?? []) {
     const source = { id: s.id, lang: s.lang, kind: s.kind, network: s.network, default_sport: s.default_sport, item_url_filter: s.item_url_filter };
     const extra = (s.source_feeds as { feed_url: string; sport: string | null }[]) ?? [];
-    if (s.network === 'bluesky' && s.handle) {
+    if (s.network === 'instagram' && s.handle) {
+      // Business Discovery: 200 calls/hour per token, so every third run (≈ every 15 min)
+      if (!includeInstagram) continue;
+      feeds.push({ feed_url: `instagram:${s.handle}`, sport: s.default_sport, source });
+    } else if (s.network === 'bluesky' && s.handle) {
       const url = `${BSKY_API}/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(s.handle)}&limit=30&filter=posts_no_replies`;
       feeds.push({ feed_url: url, sport: s.default_sport, source });
     } else if (extra.length > 0) {
@@ -41,6 +56,53 @@ async function loadFeeds(): Promise<FeedRow[]> {
     }
   }
   return feeds;
+}
+
+async function getSetting(key: string): Promise<string | null> {
+  const { data } = await supabase.from('integration_settings').select('value').eq('key', key).maybeSingle();
+  return data?.value ?? null;
+}
+
+async function setSetting(key: string, value: string) {
+  await supabase.from('integration_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+}
+
+async function graph(path: string, token: string): Promise<any> {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${path}${sep}access_token=${encodeURIComponent(token)}`, {
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(`Instagram: ${json.error.message}`);
+  return json;
+}
+
+async function instagramFeed(handle: string): Promise<FeedItem[]> {
+  const [igId, token] = await Promise.all([getSetting('ig_user_id'), getSetting('ig_page_token')]);
+  if (!igId || !token) throw new Error('Instagram not set up (run mode instagram-setup)');
+  const fields = `business_discovery.username(${handle}){media.limit(12){caption,media_type,media_url,thumbnail_url,permalink,timestamp}}`;
+  return instagramItems(await graph(`${igId}?fields=${encodeURIComponent(fields)}`, token));
+}
+
+// Instagram setup: from the owner's (long-lived) user token in INSTAGRAM_TOKEN, find the
+// Facebook Page linked to the Creator account and keep that Page's token, which does not expire.
+async function instagramSetup() {
+  const userToken = Deno.env.get('INSTAGRAM_TOKEN');
+  if (!userToken) return { ok: false, error: 'Supabase secret INSTAGRAM_TOKEN is missing' };
+  const pages = await graph('me/accounts?fields=name,access_token,instagram_business_account{id,username}', userToken);
+  const page = (pages.data ?? []).find((p: any) => p.instagram_business_account);
+  if (!page) {
+    return {
+      ok: false,
+      error: 'No Facebook Page with a connected Instagram professional account was found for this token',
+      pages: (pages.data ?? []).map((p: any) => p.name),
+    };
+  }
+  await setSetting('ig_user_id', page.instagram_business_account.id);
+  await setSetting('ig_username', page.instagram_business_account.username ?? '');
+  await setSetting('ig_page_token', page.access_token);
+  const test = await instagramFeed('433').then((items) => items.length).catch((e) => String(e));
+  return { ok: true, page: page.name, instagram: page.instagram_business_account.username, test433: test };
 }
 
 async function fetchFeed(url: string): Promise<string> {
@@ -61,9 +123,15 @@ async function newOnly(items: FeedItem[]): Promise<FeedItem[]> {
 }
 
 async function processFeed(feed: FeedRow): Promise<number> {
-  const xml = await fetchFeed(feed.feed_url);
+  const xml = feed.source.network === 'instagram' ? '' : await fetchFeed(feed.feed_url);
   const filter = feed.source.item_url_filter;
-  const parsed = (feed.source.network === 'bluesky' ? blueskyItems(JSON.parse(xml)) : parseFeed(xml, feed.feed_url))
+  const parsed = (
+    feed.source.network === 'instagram'
+      ? await instagramFeed(feed.feed_url.slice('instagram:'.length))
+      : feed.source.network === 'bluesky'
+        ? blueskyItems(JSON.parse(xml))
+        : parseFeed(xml, feed.feed_url)
+  )
     .filter((i) => !filter || i.url.toLowerCase().includes(filter))
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .slice(0, MAX_ITEMS_PER_FEED);
@@ -312,6 +380,9 @@ Deno.serve(async (req) => {
   if (body?.mode === 'translate-backfill') {
     return Response.json(await translateBackfill());
   }
+  if (body?.mode === 'instagram-setup') {
+    return Response.json(await instagramSetup().catch((e) => ({ ok: false, error: String(e) })));
+  }
   if (body?.mode === 'bluesky-discover') {
     return Response.json(await blueskyDiscover(body.queries ?? []));
   }
@@ -319,6 +390,7 @@ Deno.serve(async (req) => {
     return Response.json(await reclassifyAll());
   }
 
+  includeInstagram = body?.instagram === true || new Date().getUTCMinutes() % 15 < 5;
   const feeds = await loadFeeds();
   const results: Record<string, number | string> = {};
   // Small concurrency so one slow portal does not block the rest.

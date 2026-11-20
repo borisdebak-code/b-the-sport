@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifySport, isTransfer, sportFromText, sportFromUrl, transferStage } from '../functions/_shared/classify.ts';
-import { discoverFeeds, parseFeed, shortSummary, youtubeFeedFromChannelPage } from '../functions/_shared/feed.ts';
+import { blueskyItems, discoverFeeds, instagramItems, parseFeed, shortSummary, youtubeFeedFromChannelPage } from '../functions/_shared/feed.ts';
 import { needsTranslation } from '../functions/_shared/translate.ts';
 
 test('sport from portal URL sections', () => {
@@ -146,4 +146,36 @@ test('social account sport is only a hint', () => {
   assert.equal(classifySport(nfl), 'ostalo');
   assert.equal(classifySport({ url: 'https://youtube.com/watch?v=2', title: 'Best moments of the week', hintSport: 'nogomet' }), 'nogomet');
   assert.equal(isTransfer('Legendary writer John McClain joins the show this morning'), false);
+});
+
+test('instagram business discovery media', () => {
+  const items = instagramItems(
+    {
+      business_discovery: {
+        media: {
+          data: [
+            { caption: 'HERE WE GO! Gvardiol to Real Madrid 🚨\nDeal agreed tonight.', media_type: 'IMAGE', media_url: 'https://img/1.jpg', permalink: 'https://www.instagram.com/p/A/', timestamp: '2026-11-19T10:00:00+0000' },
+            { caption: 'Goal of the week', media_type: 'VIDEO', media_url: 'https://v/2.mp4', thumbnail_url: 'https://img/2.jpg', permalink: 'https://www.instagram.com/reel/B/', timestamp: '2026-11-19T11:00:00+0000' },
+            { media_type: 'IMAGE', permalink: 'https://www.instagram.com/p/C/' },
+          ],
+        },
+      },
+    },
+    new Date('2026-11-20T00:00:00Z'),
+  );
+  assert.equal(items.length, 2);
+  assert.equal(items[0].title, 'HERE WE GO! Gvardiol to Real Madrid 🚨');
+  assert.equal(items[0].summary, 'Deal agreed tonight.');
+  assert.equal(items[1].imageUrl, 'https://img/2.jpg');
+});
+
+test('bluesky author feed skips reposts', () => {
+  const items = blueskyItems({
+    feed: [
+      { post: { uri: 'at://did:plc:x/app.bsky.feed.post/abc', author: { handle: 'theathletic.com' }, record: { text: 'Big match tonight', createdAt: '2026-11-19T10:00:00Z' } } },
+      { post: { uri: 'at://did:plc:x/app.bsky.feed.post/def', author: { handle: 'other.com' }, record: { text: 'Repost' } }, reason: { $type: 'app.bsky.feed.defs#reasonRepost' } },
+    ],
+  } as never, new Date('2026-11-20T00:00:00Z'));
+  assert.equal(items.length, 1);
+  assert.equal(items[0].url, 'https://bsky.app/profile/theathletic.com/post/abc');
 });
