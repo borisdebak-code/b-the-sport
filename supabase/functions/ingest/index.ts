@@ -67,16 +67,32 @@ async function processFeed(feed: FeedRow): Promise<number> {
   const fresh = (await newOnly(parsed)).filter((i) => i.publishedAt.getTime() > Date.now() - 30 * 864e5);
   if (fresh.length === 0) return 0;
 
-  let titlesHr: (string | null)[] = fresh.map(() => null);
-  let summariesHr: (string | null)[] = fresh.map(() => null);
+  // Classify on the original text first; only sport items are worth translation budget.
+  const sports = fresh.map((i) =>
+    classifySport({
+      url: i.url,
+      title: i.title,
+      summary: i.summary,
+      categories: i.categories,
+      feedSport: feed.sport ?? feed.source.default_sport,
+    }),
+  );
+
+  // Titles only: summaries would exceed the free translation quota.
+  const titlesHr: (string | null)[] = fresh.map(() => null);
   if (translator && needsTranslation(feed.source.lang)) {
-    try {
-      titlesHr = await translator.translate(fresh.map((i) => i.title), feed.source.lang);
-      const withSummary = fresh.map((i, idx) => [idx, i.summary] as const).filter(([, s]) => !!s);
-      const translated = await translator.translate(withSummary.map(([, s]) => s!), feed.source.lang);
-      withSummary.forEach(([idx], k) => (summariesHr[idx] = translated[k]));
-    } catch (e) {
-      console.error('translation failed', feed.feed_url, e);
+    const todo = fresh.map((i, idx) => [idx, i.title] as const).filter(([idx]) => sports[idx] !== 'ostalo');
+    const chars = todo.reduce((n, [, t]) => n + t.length, 0);
+    if (todo.length > 0) {
+      const { data: allowed } = await supabase.rpc('reserve_translation_chars', { p_chars: chars });
+      if (allowed) {
+        try {
+          const out = await translator.translate(todo.map(([, t]) => t), feed.source.lang);
+          todo.forEach(([idx], k) => (titlesHr[idx] = out[k] ?? null));
+        } catch (e) {
+          console.error('translation failed', feed.feed_url, e);
+        }
+      }
     }
   }
 
@@ -89,14 +105,8 @@ async function processFeed(feed: FeedRow): Promise<number> {
     published_at: i.publishedAt.toISOString(),
     lang: feed.source.lang,
     title_hr: titlesHr[idx],
-    summary_hr: summariesHr[idx],
-    sport: classifySport({
-      url: i.url,
-      title: titlesHr[idx] ?? i.title,
-      summary: summariesHr[idx] ?? i.summary,
-      categories: i.categories,
-      feedSport: feed.sport ?? feed.source.default_sport,
-    }),
+    summary_hr: null,
+    sport: sports[idx],
   }));
 
   const { data: inserted, error } = await supabase

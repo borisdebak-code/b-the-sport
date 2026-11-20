@@ -33,7 +33,8 @@ export const NewsCard = memo(function NewsCard({ entry, showSport }: { entry: Fe
           <Text style={[styles.title, { color: p.text }]} numberOfLines={4}>
             {title}
           </Text>
-          {entry.summary ? (
+          {/* foreign summaries are not translated (quota), so they are hidden next to a translated title */}
+          {entry.summary && !entry.translated ? (
             <Text style={[styles.summary, { color: p.textSecondary }]} numberOfLines={2}>
               {entry.summary}
             </Text>
