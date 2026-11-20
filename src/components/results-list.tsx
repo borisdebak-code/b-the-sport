@@ -2,14 +2,18 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { MaxContentWidth, Spacing, usePalette } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 import {
+  fetchFavoriteTeams,
   fetchMatches,
   matchPhase,
   matchStatusText,
   NotConfiguredError,
   type LeagueGroup,
   type MatchRow,
+  withFavoritesFirst,
 } from '@/lib/feed';
+import { useAppState } from '@/state/app-state';
 import type { SportId } from '@/lib/sports';
 
 import { Chips, type ChipOption } from './chips';
@@ -38,29 +42,41 @@ function ResultsDay({
   header?: ReactElement;
 }) {
   const p = usePalette();
+  const { favorites } = useAppState();
+  const favoriteIds = favorites.map((f) => f.id).join(',');
   const [groups, setGroups] = useState<LeagueGroup[] | null>(null);
+  const [favoriteMatches, setFavoriteMatches] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const req = useRef(0);
 
   useEffect(() => {
     const id = ++req.current;
-    fetchMatches(sport, day)
-      .then((g) => id === req.current && setGroups(g))
+    const ids = favoriteIds ? favoriteIds.split(',').map(Number) : [];
+    Promise.all([fetchMatches(sport, day), fetchFavoriteTeams(ids, sport).catch(() => [])])
+      .then(([g, teams]) => {
+        if (id !== req.current) return;
+        const r = withFavoritesFirst(g, teams);
+        setGroups(r.groups);
+        setFavoriteMatches(r.favorite);
+      })
       .catch((e: unknown) => {
         if (id !== req.current) return;
         setError(e instanceof NotConfiguredError ? 'Baza još nije povezana.' : String((e as Error).message ?? e));
         setGroups([]);
       });
-  }, [sport, day]);
+  }, [sport, day, favoriteIds]);
 
   const refresh = useCallback(async () => {
     const id = ++req.current;
     setRefreshing(true);
     try {
-      const g = await fetchMatches(sport, day);
+      const ids = favoriteIds ? favoriteIds.split(',').map(Number) : [];
+      const [g, teams] = await Promise.all([fetchMatches(sport, day), fetchFavoriteTeams(ids, sport).catch(() => [])]);
       if (id === req.current) {
-        setGroups(g);
+        const r = withFavoritesFirst(g, teams);
+        setGroups(r.groups);
+        setFavoriteMatches(r.favorite);
         setError(null);
       }
     } catch (e) {
@@ -68,12 +84,12 @@ function ResultsDay({
     } finally {
       setRefreshing(false);
     }
-  }, [sport, day]);
+  }, [sport, day, favoriteIds]);
 
   return (
     <SectionList
       sections={groups ?? []}
-      keyExtractor={(m) => m.id}
+      keyExtractor={(m, i) => `${m.id}:${i}`}
       stickySectionHeadersEnabled={false}
       style={{ backgroundColor: p.background }}
       contentContainerStyle={styles.content}
@@ -97,13 +113,28 @@ function ResultsDay({
         <Text style={[styles.league, { color: p.textSecondary }]}>{section.title}</Text>
       )}
       renderItem={({ item, index, section }) => (
-        <MatchItem match={item} first={index === 0} last={index === section.data.length - 1} />
+        <MatchItem
+          match={item}
+          first={index === 0}
+          last={index === section.data.length - 1}
+          favorite={favoriteMatches.has(item.id)}
+        />
       )}
     />
   );
 }
 
-function MatchItem({ match, first, last }: { match: MatchRow; first: boolean; last: boolean }) {
+function MatchItem({
+  match,
+  first,
+  last,
+  favorite,
+}: {
+  match: MatchRow;
+  first: boolean;
+  last: boolean;
+  favorite: boolean;
+}) {
   const p = usePalette();
   const phase = matchPhase(match.status);
   const live = phase === 'live';
@@ -123,6 +154,7 @@ function MatchItem({ match, first, last }: { match: MatchRow; first: boolean; la
       <Text style={[styles.status, { color: live ? p.accent : p.textSecondary }, live && styles.statusLive]}>
         {matchStatusText(match)}
       </Text>
+      <View style={styles.star}>{favorite ? <Ionicons name="star" size={12} color={p.accent} /> : null}</View>
       <View style={styles.teams}>
         <Text style={[styles.team, { color: p.text }, homeWon && styles.winner]} numberOfLines={1}>
           {match.home}
@@ -199,6 +231,10 @@ const styles = StyleSheet.create({
   },
   statusLive: {
     fontWeight: '800',
+  },
+  star: {
+    width: 12,
+    marginRight: -Spacing.one,
   },
   teams: {
     flex: 1,

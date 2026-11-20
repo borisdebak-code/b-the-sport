@@ -404,7 +404,9 @@ Deno.serve(async (req) => {
           .map((m) => [m[1], m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()])
           .filter(([, t]) => t.length > 35)
           .slice(0, 8);
-        out[u] = { status: res.status, length: html.length, feeds: discoverFeeds(html, u), links };
+        const title = html.match(/<meta property="og:title" content="([^"]*)"/)?.[1] ?? null;
+        const yt = youtubeFeedFromChannelPage(html);
+        out[u] = { status: res.status, length: html.length, title, youtubeFeed: yt, feeds: discoverFeeds(html, u), links };
       } catch (e) {
         out[u] = String(e);
       }

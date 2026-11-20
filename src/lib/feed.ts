@@ -226,3 +226,33 @@ export function matchStatusText(m: Pick<MatchRow, 'status' | 'elapsed' | 'starts
   const other: Record<string, string> = { PST: 'Odgođeno', CANC: 'Otkazano', ABD: 'Prekinuto', SUSP: 'Prekinuto', AWD: 'Službeni rez.', WO: 'B.b.' };
   return other[m.status] ?? m.status;
 }
+
+/** API team names of the user's favourite clubs / national teams for one sport. */
+export async function fetchFavoriteTeams(entityIds: number[], sport: SportId): Promise<string[]> {
+  if (!supabase || entityIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('followable_entities')
+    .select('team_names')
+    .in('id', entityIds)
+    .eq('sport', sport);
+  if (error) throw new Error(error.message);
+  return (data ?? []).flatMap((r) => (r.team_names as string[]) ?? []);
+}
+
+/** Puts the favourite teams' matches in their own group on top. */
+export function withFavoritesFirst(groups: LeagueGroup[], teams: string[]): { groups: LeagueGroup[]; favorite: Set<string> } {
+  const names = new Set(teams.map((t) => t.toLowerCase()));
+  const favorite = new Set<string>();
+  const mine: MatchRow[] = [];
+  for (const g of groups) {
+    for (const m of g.data) {
+      if (names.has(m.home.toLowerCase()) || names.has(m.away.toLowerCase())) {
+        favorite.add(m.id);
+        mine.push(m);
+      }
+    }
+  }
+  if (mine.length === 0) return { groups, favorite };
+  mine.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  return { groups: [{ title: 'Moji favoriti', priority: -1, data: mine }, ...groups], favorite };
+}
