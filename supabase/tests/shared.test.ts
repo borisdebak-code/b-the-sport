@@ -26,6 +26,11 @@ test('sport from text keywords', () => {
   assert.equal(sportFromText('UFC 320: nokaut u prvoj rundi'), 'borilacki');
   assert.equal(sportFromText('Zrinka Ljutić pobijedila u slalomu'), 'zimski');
   assert.equal(sportFromText('Atletičarka oborila nacionalni rekord'), null);
+  // regressions from the first real ingest
+  assert.equal(sportFromText('Lokomotiva dovela bivšeg veznjaka Inter Miamija'), 'nogomet');
+  assert.equal(sportFromText('Pašalićev Orlando ispao iz play-offa MLS-a'), 'nogomet');
+  assert.equal(sportFromText('Niko Pulić i Ivica Kostelić zvijezde Rallyja Santa Domenica'), 'f1moto');
+  assert.equal(sportFromText('Odbojkaši Mladosti uvjerljivi u Mađarskoj'), null);
 });
 
 test('classifySport precedence', () => {

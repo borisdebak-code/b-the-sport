@@ -28,7 +28,7 @@ export function normalize(text: string): string {
 // URL path / RSS category words (normalized) that name a sport directly.
 const SECTION_WORDS: Record<Exclude<SportId, 'ostalo'>, string[]> = {
   nogomet: ['nogomet', 'fudbal', 'football', 'soccer', 'futbol', 'calcio', 'fussball', 'futebol', 'nogomet-hnl', 'hnl', 'premier-league', 'serie-a', 'laliga', 'bundesliga', 'ligue-1', 'champions-league', 'liga-prvaka'],
-  kosarka: ['kosarka', 'basketball', 'baloncesto', 'basket', 'nba', 'euroleague', 'euroliga', 'aba-liga'],
+  kosarka: ['kosarka', 'basketball', 'baloncesto', 'basket', 'nba', 'wnba', 'euroleague', 'euroliga', 'aba-liga', 'mens-college-basketball', 'womens-college-basketball'],
   rukomet: ['rukomet', 'handball', 'balonmano', 'pallamano', 'rokomet'],
   tenis: ['tenis', 'tennis'],
   vaterpolo: ['vaterpolo', 'waterpolo', 'water-polo', 'pallanuoto'],
@@ -48,6 +48,22 @@ const KEYWORDS: Record<Exclude<SportId, 'ostalo'>, [string, number][]> = {
     ['vratar', 2], ['penal', 2], ['jedanaesterac', 3], ['transfer', 1], ['real madrid', 2], ['barcelona', 1],
     ['manchester', 2], ['liverpool', 2], ['arsenal', 2], ['chelsea', 2], ['juventus', 2], ['bayern', 2],
     ['psg', 2], ['modric', 2], ['gvardiol', 2], ['kovacic', 2], ['here we go', 3], ['gol', 1], ['goal', 1],
+    ['dinamo', 1], ['lokomotiva', 2], ['gorica', 2], ['slaven belupo', 3], ['istra 1961', 3], ['varazdin', 1],
+    ['vukovar 1991', 3], ['sibenik', 1], ['zvezd', 1], ['crvena zvezda', 2], ['mls', 3], ['messi', 3], ['ronaldo', 3],
+    ['mbappe', 3], ['haaland', 3], ['guardiola', 3], ['ancelotti', 3], ['mourinho', 3], ['klopp', 3], ['inter ', 2],
+    ['atletico', 3], ['tottenham', 3], ['newcastle', 3], ['napoli', 3], ['lazio', 3], ['benfica', 3], ['ajax', 3],
+    ['psv', 3], ['galatasaray', 3], ['fenerbahce', 3], ['celtic', 2], ['borussia', 3], ['leverkusen', 3],
+    ['veznjak', 3], ['vezni', 2], ['napadac', 3], ['napadaca', 3], ['branic', 3], ['stoper', 2], ['golgeter', 3],
+    ['drugoligas', 3], ['prvoligas', 3], ['nogometas', 3], ['fudbaler', 3], ['footballer', 3], ['striker', 3],
+    ['midfielder', 3], ['defender', 2], ['goalkeeper', 3], ['liga nacija', 3], ['nations league', 3], ['euro 2028', 3],
+    ['svjetsko prvenstvo', 1], ['world cup', 2], ['selektor', 1], ['bilic', 2], ['jelavic', 2], ['leko', 2],
+    ['perisic', 2], ['pasalic', 2], ['kramaric', 2], ['budimir', 2], ['suker', 2], ['planas', 2], ['stadion', 1],
+    ['ircima', 1], ['irska', 1], ['ireland', 1], ['futbolista', 3], ['calciatore', 3], ['fussballer', 3], ['tor ', 1],
+    ['lige nacija', 3], ['ligu nacija', 3], ['ligi nacija', 3], ['interu', 2], ['intera', 2], ['sucic', 2],
+    ['gattuso', 3], ['transfer', 1], ['u-17', 1], ['u17', 1], ['reprezentativac', 1], ['utakmic', 1],
+    ['futebol', 3], ['golo', 2], ['treinador', 1], ['sporting', 2], ['entrenador', 1], ['barca', 2], ['madrid', 1],
+    ['dortmund', 3], ['stuttgart', 2], ['bundesliga', 3], ['mercato', 3], ['marseille', 2], ['lyon', 2],
+    ['entraineur', 1], ['bleus', 2], ['premier', 1], ['fc ', 2], ['cf ', 1], ['uefa', 2],
   ],
   kosarka: [
     ['kosark', 3], ['basketball', 3], ['baloncesto', 3], ['nba', 3], ['euroleague', 3], ['euroliga', 3],
@@ -70,7 +86,7 @@ const KEYWORDS: Record<Exclude<SportId, 'ostalo'>, [string, number][]> = {
   f1moto: [
     ['formula 1', 3], ['formule 1', 3], ['formula one', 3], ['f1', 3], ['grand prix', 2], ['velika nagrada', 2],
     ['motogp', 3], ['verstappen', 3], ['hamilton', 2], ['leclerc', 3], ['norris', 2], ['ferrari', 1],
-    ['red bull racing', 3], ['mclaren', 3], ['kvalifikacij', 1], ['pole position', 3], ['reli', 1], ['rally', 2],
+    ['red bull racing', 3], ['mclaren', 3], ['kvalifikacij', 1], ['pole position', 3], ['reli', 1], ['rally', 3], ['wrc', 3], ['nascar', 3], ['indycar', 3],
   ],
   borilacki: [
     ['ufc', 3], ['mma', 3], ['boks', 3], ['boxing', 3], ['boxeo', 3], ['kickbox', 3], ['judo', 3],
