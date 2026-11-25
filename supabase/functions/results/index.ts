@@ -8,6 +8,7 @@
 //   { "mode": "discover", "sport": "football", "day": 0 }
 //                                         list competitions on that date (to choose result_leagues)
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { espnMatches, espnUrl, type EspnLeague } from './espn.ts';
 
 type Sport = 'football' | 'basketball' | 'handball';
 const SPORT_ID: Record<Sport, string> = { football: 'nogomet', basketball: 'kosarka', handball: 'rukomet' };
@@ -109,29 +110,67 @@ function toMatch(sport: Sport, r: any): Match {
   };
 }
 
+function ymd(offsetDays: number): string {
+  return zagrebDate(offsetDays).replaceAll('-', '');
+}
+
 async function refresh(days: number[]): Promise<Record<string, number | string>> {
-  const { data: leagues, error } = await supabase.from('result_leagues').select('sport, league_id');
+  const { data: leagues, error } = await supabase
+    .from('result_leagues')
+    .select('sport, league_id, name, provider, espn_code');
   if (error) throw error;
-  const wanted = new Set((leagues ?? []).map((l) => `${l.sport}:${l.league_id}`));
   const out: Record<string, number | string> = {};
-  for (const sport of Object.keys(HOST) as Sport[]) {
-    if (![...wanted].some((k) => k.startsWith(`${SPORT_ID[sport]}:`))) continue; // no competitions chosen
-    for (const day of days) {
-      const date = zagrebDate(day);
+  const save = async (key: string, rows: Match[]) => {
+    if (rows.length) {
+      const { error: e } = await supabase.from('matches').upsert(rows, { onConflict: 'id' });
+      if (e) throw e;
+    }
+    out[key] = rows.length;
+  };
+
+  // ESPN: a Zagreb day overlaps two US dates (NBA tips off after midnight here), so ask for day-1 and day.
+  const espn = (leagues ?? []).filter((l) => l.provider === 'espn' && l.espn_code) as EspnLeague[];
+  const espnDays = [...new Set(days.flatMap((d) => [d - 1, d]))];
+  for (const l of espn) {
+    for (const d of espnDays) {
+      const key = `espn ${l.espn_code} ${ymd(d)}`;
       try {
-        const rows = (await callApi(sport, date))
-          .map((r) => toMatch(sport, r))
-          .filter((m) => wanted.has(`${m.sport}:${m.league_id}`));
-        if (rows.length) {
-          const { error: e } = await supabase.from('matches').upsert(rows, { onConflict: 'id' });
-          if (e) throw e;
-        }
-        out[`${sport} ${date}`] = rows.length;
+        const res = await fetch(espnUrl(l, ymd(d)), {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BTheSport/1.0; personal news reader)', Accept: 'application/json' },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await save(key, espnMatches(l, await res.json()) as Match[]);
       } catch (e) {
-        out[`${sport} ${date}`] = String(e).slice(0, 300);
+        out[key] = String(e).slice(0, 200);
       }
     }
   }
+
+  // API-Sports: only competitions ESPN does not cover, and only while the account works.
+  const { data: flag } = await supabase.from('integration_settings').select('value').eq('key', 'api_sports_enabled').maybeSingle();
+  if (flag?.value === 'false') {
+    out['api-sports'] = 'disabled (integration_settings.api_sports_enabled = false)';
+  } else {
+    const wanted = new Set(
+      (leagues ?? []).filter((l) => l.provider === 'api-sports').map((l) => `${l.sport}:${l.league_id}`),
+    );
+    for (const sport of Object.keys(HOST) as Sport[]) {
+      if (![...wanted].some((k) => k.startsWith(`${SPORT_ID[sport]}:`))) continue;
+      for (const day of days) {
+        const date = zagrebDate(day);
+        try {
+          const rows = (await callApi(sport, date))
+            .map((r) => toMatch(sport, r))
+            .filter((m) => wanted.has(`${m.sport}:${m.league_id}`));
+          await save(`${sport} ${date}`, rows);
+        } catch (e) {
+          out[`${sport} ${date}`] = String(e).slice(0, 300);
+        }
+      }
+    }
+  }
+
   // keep one week of history
   await supabase.from('matches').delete().lt('starts_at', new Date(Date.now() - 7 * 864e5).toISOString());
   return out;

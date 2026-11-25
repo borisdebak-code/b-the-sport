@@ -193,3 +193,36 @@ test('article links from a section page', () => {
   const card = '<a href="/sport/nogomet/nejevolja-1942100"><span>Robert Balantič</span><span>danes ob 14:24</span><h3>Nejevolja po pokalnem vikendu - je bilo tega res treba</h3></a>';
   assert.equal(htmlItems(card, 'https://ekipa.svet24.si/', /^\/sport\/.+-\d{6,}$/)[0].title, 'Nejevolja po pokalnem vikendu - je bilo tega res treba');
 });
+
+test('ESPN scoreboard to matches', async () => {
+  const { espnMatches, espnStatus } = await import('../functions/results/espn.ts');
+  const league = { sport: 'nogomet', league_id: 2, name: 'UEFA Liga prvaka', espn_code: 'uefa.champions' };
+  const json = {
+    events: [
+      {
+        id: '701', date: '2026-11-25T20:00Z',
+        status: { displayClock: "67'", period: 2, type: { state: 'in', name: 'STATUS_SECOND_HALF' } },
+        competitions: [{ competitors: [
+          { homeAway: 'home', score: '2', team: { displayName: 'Arsenal' } },
+          { homeAway: 'away', score: '1', team: { displayName: 'Bayern Munich' } },
+        ] }],
+      },
+      {
+        id: '702', date: '2026-11-25T17:45Z',
+        status: { type: { state: 'pre', name: 'STATUS_SCHEDULED' } },
+        competitions: [{ competitors: [
+          { homeAway: 'home', score: '0', team: { displayName: 'Dinamo Zagreb' } },
+          { homeAway: 'away', score: '0', team: { displayName: 'Real Madrid' } },
+        ] }],
+      },
+    ],
+  };
+  const rows = espnMatches(league, json, '2026-11-25T20:30:00Z');
+  assert.equal(rows.length, 2);
+  assert.deepEqual([rows[0].status, rows[0].elapsed, rows[0].home_score, rows[0].away_score], ['LIVE', 67, 2, 1]);
+  assert.deepEqual([rows[1].status, rows[1].home_score], ['NS', null]);
+  assert.equal(rows[1].id, 'espn:uefa.champions:702');
+  assert.equal(espnStatus({ state: 'post', name: 'STATUS_FULL_TIME' }).status, 'FT');
+  assert.equal(espnStatus({ state: 'in', name: 'STATUS_HALFTIME' }).status, 'HT');
+  assert.equal(espnStatus({ state: 'post', name: 'STATUS_POSTPONED' }).status, 'PST');
+});
